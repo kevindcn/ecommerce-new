@@ -1,0 +1,178 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { products as fallbackProducts } from '@/data/products'
+import { productAPI } from '@/lib/api'
+import Navbar from "@/components/navbar";
+import ProductCard from '@/components/ui/productCard';
+import { ArrowRight, Zap, Shield, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+
+export default function HomePage() {
+  const categories = ["Semua", "Footwear", "Apparel", "Bags", "Accessories"];
+  const [activeCategory, setActiveCategory] = useState('Semua')
+  const [allProducts, setAllProducts] = useState(fallbackProducts)
+  const [loadingProducts, setLoadingProducts] = useState(false)
+
+  // Fetch dari backend saat tersedia
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoadingProducts(true)
+      try {
+        const data = await productAPI.getAll()
+        if (data && data.length > 0) setAllProducts(data)
+      } catch {
+        // pakai fallback data jika backend belum jalan
+      } finally {
+        setLoadingProducts(false)
+      }
+    }
+    loadProducts()
+  }, [])
+
+  const filtered =
+    activeCategory === 'Semua'
+      ? allProducts
+      : allProducts.filter((p) => p.category === activeCategory)
+
+  return (
+    <div className="min-h-screen bg-white">
+      <Navbar />
+
+      {/* Hero Banner */}
+      <section className="relative h-[70vh] min-h-[500px] bg-gray-900 overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1600&h=900&fit=crop"
+          alt="Hero banner"
+          fill
+          className="object-cover opacity-50"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-transparent" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+          <div className="max-w-lg">
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+              <Zap size={12} className="text-yellow-400" />
+              New Collection 2025
+            </div>
+            <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight leading-none mb-4">
+              Style Your
+              <br />
+              <span className="italic font-normal">Urban Life</span>
+            </h1>
+            <p className="text-gray-300 text-lg mb-8 leading-relaxed">
+              Koleksi eksklusif untuk kamu yang punya selera tinggi di kehidupan urban sehari-hari.
+            </p>
+            <div className="flex gap-3">
+              <button className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm">
+                Shop Now <ArrowRight size={16} />
+              </button>
+              <button className="border border-white/30 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10 transition-colors text-sm">
+                Lihat Koleksi
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Bar */}
+      <section className="bg-gray-50 border-y border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-3 divide-x divide-gray-200">
+            {[
+              { icon: RefreshCw, title: "Free Returns", sub: "30 hari pengembalian gratis" },
+              { icon: Shield, title: "100% Original", sub: "Produk original bergaransi" },
+              { icon: Zap, title: "Fast Delivery", sub: "Pengiriman 1-3 hari kerja" },
+            ].map(({ icon: Icon, title, sub }) => (
+              <div key={title} className="flex items-center gap-3 px-6 py-5">
+                <div className="p-2 bg-gray-900 rounded-lg text-white flex-shrink-0">
+                  <Icon size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-500 hidden sm:block">{sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Product Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Produk Terbaru</h2>
+            <p className="text-gray-500 mt-1 text-sm">Temukan pilihan terbaik kami</p>
+          </div>
+          <Link href="/home" className="text-sm font-semibold text-gray-900 hover:underline flex items-center gap-1">
+            Lihat Semua <ArrowRight size={14} />
+          </Link>
+        </div>
+
+        {/* Category Filter */}
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`flex-shrink-0 px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                activeCategory === cat
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Product Grid */}
+  {loadingProducts ? (
+      <div className="flex justify-center items-center py-20">
+        <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+      </div>
+    ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6">
+          {filtered.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+    )}
+      </section>
+
+      {/* Promo Banner */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        <div className="relative bg-gray-900 rounded-3xl overflow-hidden h-48">
+          <Image
+            src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200&h=400&fit=crop"
+            alt="Promo"
+            fill
+            className="object-cover opacity-30"
+          />
+          <div className="relative h-full flex items-center justify-between px-10">
+            <div>
+              <p className="text-yellow-400 text-sm font-bold uppercase tracking-widest mb-2">Special Offer</p>
+              <h3 className="text-white text-3xl font-bold">Diskon Hingga 40%</h3>
+              <p className="text-gray-300 text-sm mt-1">Hanya untuk produk pilihan. Terbatas!</p>
+            </div>
+            <button className="bg-white text-gray-900 font-bold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors text-sm flex-shrink-0">
+              Klaim Sekarang
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-50 border-t border-gray-100 py-10">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="text-2xl font-bold tracking-tighter text-gray-900 mb-2">AUSTIN & CO</p>
+          <p className="text-sm text-gray-400">© 2025 AUSTIN & CO Fashion Store. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+
