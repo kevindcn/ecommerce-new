@@ -32,6 +32,8 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     }),
+
+    getProfile: () => fetchAPI('/api/auth/profile'),
 }
 
 // ── PRODUCTS ──────────────────────────────────────────
@@ -43,21 +45,25 @@ export const productAPI = {
     fetchAPI(`/api/products/${id}`),
 }
 
-// ── CART ──────────────────────────────────────────────
+// ── CART ──
 export const cartAPI = {
   get: () => fetchAPI('/api/cart'),
-  add: (productId: number, quantity: number) =>
+
+  add: (productId: number, quantity: number, size?: string) =>
     fetchAPI('/api/cart', {
       method: 'POST',
-      body: JSON.stringify({ productId, quantity }),
+      body: JSON.stringify({ productId, quantity, size }),
     }),
+
   update: (itemId: number, quantity: number) =>
     fetchAPI(`/api/cart/${itemId}`, {
       method: 'PUT',
       body: JSON.stringify({ quantity }),
     }),
+
   remove: (itemId: number) =>
     fetchAPI(`/api/cart/${itemId}`, { method: 'DELETE' }),
+
   clear: () => fetchAPI('/api/cart/clear', { method: 'DELETE' }),
 }
 
@@ -81,9 +87,9 @@ export const orderAPI = {
 
 // ── PAYMENT ───────────────────────────────────────────
 export const paymentAPI = {
-  process: (orderId: number, method: string, cardDetails?: object) =>
+  create: (orderId: number, method: string) =>
     fetchAPI('/api/payments', {
       method: 'POST',
-      body: JSON.stringify({ orderId, method, cardDetails }),
+      body: JSON.stringify({ orderId, method }),
     }),
 }

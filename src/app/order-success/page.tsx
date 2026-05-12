@@ -17,21 +17,23 @@ export default function OrderSuccessPage() {
   const [latestOrderId, setLatestOrderId]     = useState<string | null>(null)
   const [latestOrderNumber, setLatestOrderNumber] = useState<string>('')
 
-  useEffect(() => {
-    // ✅ Baca order yang baru saja dibuat di payment page
-    const orderId     = sessionStorage.getItem('latestOrderId')
-    const orderNumber = sessionStorage.getItem('latestOrderNumber')
+ useEffect(() => {
+  const orderId = sessionStorage.getItem('latestOrderId')
 
-    if (orderId)     setLatestOrderId(orderId)
-    if (orderNumber) setLatestOrderNumber(orderNumber)
+  if (orderId) {
+    setLatestOrderId(orderId)
+    setLatestOrderNumber(`ORDER-${orderId}`)
+  } else {
+    // Kalau tidak ada order, redirect ke home
+    router.push('/home')
+  }
 
-    // Bersihkan setelah dibaca
-    sessionStorage.removeItem('latestOrderId')
-    sessionStorage.removeItem('latestOrderNumber')
+  sessionStorage.removeItem('latestOrderId')
+  sessionStorage.removeItem('latestOrderNumber')
 
-    const t = setTimeout(() => setShowRating(true), 3000)
-    return () => clearTimeout(t)
-  }, [])
+  const t = setTimeout(() => setShowRating(true), 3000)
+  return () => clearTimeout(t)
+}, [router])
 
   const handleTrackOrder = () => {
     if (latestOrderId) {

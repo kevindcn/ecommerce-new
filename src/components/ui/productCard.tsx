@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Heart, ShoppingBag, Star, X, Plus, Minus } from 'lucide-react'
 import { Product, formatPrice } from '@/data/products'
 import { useCart } from '@/context/CartContext'
+import { useAuth } from '@/context/AuthContext'
+import LoginModal from '@/components/LoginModal'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { useState } from 'react'
@@ -19,8 +21,11 @@ const COLORS = [
 
 export default function ProductCard({ product }: { product: Product }) {
   const { addToCart } = useCart()
+  const { isLoggedIn } = useAuth()
+
   const [wishlisted, setWishlisted] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [selectedSize, setSelectedSize] = useState('')
   const [selectedColor, setSelectedColor] = useState('')
   const [qty, setQty] = useState(1)
@@ -33,11 +38,17 @@ export default function ProductCard({ product }: { product: Product }) {
 
   const handleAddClick = (e: React.MouseEvent) => {
     e.preventDefault()
+
+    // ✅ Cek login dulu sebelum apapun
+    if (!isLoggedIn) {
+      setShowLoginModal(true)
+      return
+    }
+
     if (needsVariant) {
       setShowModal(true)
     } else {
       addToCart(product, 1)
-      // ✅ Format sonner yang benar
       toast.success('Ditambahkan ke keranjang!', {
         description: product.name,
       })
@@ -45,8 +56,14 @@ export default function ProductCard({ product }: { product: Product }) {
   }
 
   const handleConfirmAdd = () => {
+    // ✅ Double-check login (kalau modal variant sudah terbuka tapi session expired)
+    if (!isLoggedIn) {
+      setShowModal(false)
+      setShowLoginModal(true)
+      return
+    }
+
     if (needsVariant && !selectedSize) {
-      // ✅ Format sonner error
       toast.error('Pilih ukuran dulu!', {
         description: 'Ukuran wajib dipilih sebelum menambahkan ke keranjang.',
       })
@@ -54,8 +71,6 @@ export default function ProductCard({ product }: { product: Product }) {
     }
 
     addToCart(product, qty, selectedSize || undefined)
-
-    // ✅ Format sonner success dengan detail lengkap
     toast.success('Berhasil ditambahkan!', {
       description: `${product.name}${selectedSize ? ` · ${selectedSize}` : ''}${selectedColor ? ` · ${selectedColor}` : ''} · x${qty}`,
     })
@@ -129,13 +144,10 @@ export default function ProductCard({ product }: { product: Product }) {
       {/* Variant Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowModal(false)}
           />
-
-          {/* Modal */}
           <div className="relative bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl z-10 animate-in slide-in-from-bottom-4 duration-300">
             {/* Header */}
             <div className="flex items-start gap-4 mb-6">
@@ -254,6 +266,13 @@ export default function ProductCard({ product }: { product: Product }) {
           </div>
         </div>
       )}
+
+      {/* ✅ Login Modal — muncul saat add to cart tanpa login */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        message="Masuk dulu untuk menambahkan produk ke keranjang! 🛍️"
+      />
     </>
   )
 }

@@ -1,7 +1,8 @@
 'use client'
-
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { Product } from '@/data/products'
+import { cartAPI } from '@/lib/api'
+import { useAuth } from '@/context/AuthContext'
 
 export interface CartItem {
   product: Product
@@ -23,43 +24,106 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const { isLoggedIn } = useAuth()
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('AUSTIN & CO_cart')
-      if (saved) setItems(JSON.parse(saved))
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem('AUSTIN & CO_cart', JSON.stringify(items))
-  }, [items])
-
-  const addToCart = (product: Product, quantity = 1, size?: string) => {
-    setItems((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id)
-      if (existing) {
-        return prev.map((i) =>
-          i.product.id === product.id
-            ? { ...i, quantity: i.quantity + quantity }
-            : i
-        )
+  const loadCart = useCallback(async () => {
+    if (isLoggedIn) {
+      try {
+        const data = await cartAPI.get()
+        const mapped: CartItem[] = data.map((item: any) => ({
+          product: item.product,
+          quantity: item.quantity,
+          size: item.size,
+        }))
+        setItems(mapped)
+      } catch {
+        try {
+          const saved = localStorage.getItem('AUSTIN & CO_cart')
+          if (saved) setItems(JSON.parse(saved))
+        } catch {}
       }
-      return [...prev, { product, quantity, size }]
-    })
+    } else {
+      try {
+        const saved = localStorage.getItem('AUSTIN & CO_cart')
+        if (saved) setItems(JSON.parse(saved))
+      } catch {}
+    }
+  }, [isLoggedIn])
+
+  useEffect(() => {
+    loadCart()
+  }, [loadCart])
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      localStorage.setItem('AUSTIN & CO_cart', JSON.stringify(items))
+    }
+  }, [items, isLoggedIn])
+
+  const addToCart = async (product: Product, quantity = 1, size?: string) => {
+    if (isLoggedIn) {
+      try {
+        await cartAPI.add(Number(product.id), quantity, size)
+        await loadCart()
+      } catch (err) {
+        console.error('Gagal tambah ke cart:', err)
+      }
+    } else {
+      setItems((prev) => {
+        const existing = prev.find((i) => i.product.id === product.id)
+        if (existing) {
+          return prev.map((i) =>
+            i.product.id === product.id
+              ? { ...i, quantity: i.quantity + quantity }
+              : i
+          )
+        }
+        return [...prev, { product, quantity, size }]
+      })
+    }
   }
 
-  const removeFromCart = (productId: string | number) =>
-    setItems((prev) => prev.filter((i) => i.product.id !== productId))
+  const removeFromCart = async (productId: string | number) => {
+    if (isLoggedIn) {
+      try {
+        const data = await cartAPI.get()
+        const item = data.find((i: any) => i.product.id === productId)
+        if (item) await cartAPI.remove(item.id)
+        await loadCart()
+      } catch (err) {
+        console.error('Gagal hapus dari cart:', err)
+      }
+    } else {
+      setItems((prev) => prev.filter((i) => i.product.id !== productId))
+    }
+  }
 
-  const updateQuantity = (productId: string | number, quantity: number) => {
+  const updateQuantity = async (productId: string | number, quantity: number) => {
     if (quantity <= 0) return removeFromCart(productId)
-    setItems((prev) =>
-      prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i))
-    )
+    if (isLoggedIn) {
+      try {
+        const data = await cartAPI.get()
+        const item = data.find((i: any) => i.product.id === productId)
+        if (item) await cartAPI.update(item.id, quantity)
+        await loadCart()
+      } catch (err) {
+        console.error('Gagal update cart:', err)
+      }
+    } else {
+      setItems((prev) =>
+        prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i))
+      )
+    }
   }
 
-  const clearCart = () => {
+  const clearCart = async () => {
+    if (isLoggedIn) {
+      try {
+        await cartAPI.clear()
+      } catch (err) {
+        console.error('Gagal clear cart:', err)
+      }
+    }
     setItems([])
     localStorage.removeItem('AUSTIN & CO_cart')
   }

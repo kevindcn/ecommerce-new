@@ -1,66 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/navbar'
 import { useCart } from '@/context/CartContext'
 import { formatPrice } from '@/data/products'
-import { createNewOrder, OrderItem } from '@/data/orders' // ← pastikan ada
+import { paymentAPI } from '@/lib/api'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import {
-  CreditCard, Smartphone, Building2, Wallet,
-  Lock, Check, ChevronRight, Copy
-} from 'lucide-react'
+import { Lock, ShieldCheck, ChevronRight, Check, Package, Truck } from 'lucide-react'
 
-const PAYMENT_METHODS = [
-  {
-    id: 'transfer',
-    icon: Building2,
-    label: 'Transfer Bank',
-    sub: 'BCA, Mandiri, BNI, BRI',
-    banks: [
-      { bank: 'BCA',     no: '1234567890', name: 'PT AUSTIN & CO Fashion' },
-      { bank: 'Mandiri', no: '0987654321', name: 'PT AUSTIN & CO Fashion' },
-      { bank: 'BNI',     no: '1122334455', name: 'PT AUSTIN & CO Fashion' },
-    ],
-  },
-  {
-    id: 'ewallet',
-    icon: Smartphone,
-    label: 'E-Wallet',
-    sub: 'GoPay, OVO, DANA, ShopeePay',
-    wallets: [
-      { name: 'GoPay', no: '0812-3456-7890' },
-      { name: 'OVO',   no: '0812-3456-7890' },
-      { name: 'DANA',  no: '0812-3456-7890' },
-    ],
-  },
-  {
-    id: 'card',
-    icon: CreditCard,
-    label: 'Kartu Kredit / Debit',
-    sub: 'Visa, Mastercard, JCB',
-  },
-  {
-    id: 'cod',
-    icon: Wallet,
-    label: 'Bayar di Tempat (COD)',
-    sub: 'Bayar tunai saat barang tiba',
-  },
-]
-
-// Label metode pembayaran
-const METHOD_LABELS: Record<string, string> = {
-  transfer: 'Transfer Bank',
-  ewallet:  'E-Wallet',
-  card:     'Kartu Kredit',
-  cod:      'COD',
-}
-
-// ✅ Type checkoutData yang lengkap — sebelumnya terlalu sempit
 interface CheckoutData {
   form: {
     name:     string
@@ -81,99 +31,96 @@ interface CheckoutData {
 }
 
 export default function PaymentPage() {
-  const router = useRouter()
-  const { items, totalPrice, clearCart } = useCart() // ← tambah items
-  const [method, setMethod]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [copied, setCopied]   = useState('')
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const { items, totalPrice, clearCart } = useCart()
+  const [loading, setLoading]           = useState(false)
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
-  const [cardForm, setCardForm] = useState({
-    number: '', name: '', expiry: '', cvv: ''
-  })
+
+  // Bisa dipanggil dari /payment?orderId=X (lanjut bayar dari orders page)
+  const queryOrderId = searchParams.get('orderId')
 
   useEffect(() => {
     const saved = sessionStorage.getItem('checkoutData')
     if (saved) {
-      try {
-        setCheckoutData(JSON.parse(saved))
-      } catch {
-        console.error('Gagal parse checkoutData')
-      }
+      try { setCheckoutData(JSON.parse(saved)) } catch {}
     }
   }, [])
 
-  const grandTotal = checkoutData?.grandTotal ?? (totalPrice + 25000)
+  const grandTotal   = checkoutData?.grandTotal ?? (totalPrice + 25000)
+  const shippingCost = checkoutData?.courier?.price ?? 25000
+  const subtotal     = grandTotal - shippingCost
 
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(label)
-    setTimeout(() => setCopied(''), 2000)
-  }
-
-  // ✅ handlePay yang benar — createNewOrder dipanggil di sini
-  const handlePay = async () => {
-    if (!method) return
-    setLoading(true)
-
-    // Simulasi proses pembayaran
-    await new Promise((r) => setTimeout(r, 2000))
-
-    // ✅ Konversi cart items → OrderItem
-    const orderItems: OrderItem[] = items.map((i) => ({
-      id:       String(i.product.id),
-      name:     i.product.name,
-      image:    i.product.image,
-      price:    i.product.price,
-      quantity: i.quantity,
-      size:     i.size,
-      color:    undefined,
-    }))
-
-    // ✅ Buat order baru — otomatis tersimpan ke localStorage
-    const newOrder = createNewOrder({
-      items:            orderItems,
-      totalAmount:      grandTotal,
-      shippingCost:     checkoutData?.courier?.price    ?? 25000,
-      courier:          checkoutData?.courier?.name     ?? 'JNE Reguler',
-      shippingAddress:  checkoutData?.form?.address     ?? '-',
-      shippingCity:     checkoutData?.form?.city        ?? '-',
-      shippingProvince: checkoutData?.form?.province    ?? '-',
-      phone:            checkoutData?.form?.phone       ?? '-',
-      paymentMethod:    METHOD_LABELS[method]           ?? method,
+  const openSnap = (orderId: string, snapToken: string) => {
+    ;(window as any).snap.pay(snapToken, {
+      onSuccess: (_result: any) => {
+        sessionStorage.setItem('latestOrderId', orderId)
+        sessionStorage.removeItem('currentOrderId')
+        sessionStorage.removeItem('checkoutData')
+        clearCart()
+        toast.success('Pembayaran berhasil! 🎉')
+        router.push('/order-success')
+      },
+      onPending: (_result: any) => {
+        toast.info('Pembayaran pending. Selesaikan di halaman pesanan.')
+        router.push(`/orders/${orderId}`)
+      },
+      onError: (_result: any) => {
+        toast.error('Pembayaran gagal, silakan coba lagi')
+      },
+      onClose: () => {
+        // Tetap di halaman ini, tidak redirect
+      },
     })
-
-    // ✅ Simpan id & nomor order untuk ditampilkan di halaman sukses
-    sessionStorage.setItem('latestOrderId',     newOrder.id)
-    sessionStorage.setItem('latestOrderNumber', newOrder.orderNumber)
-
-    // Bersihkan cart & checkout data
-    clearCart()
-    sessionStorage.removeItem('checkoutData')
-
-    setLoading(false)
-    router.push('/order-success')
   }
 
-  const selectedMethod = PAYMENT_METHODS.find((m) => m.id === method)
+  const handlePay = async () => {
+    setLoading(true)
+    try {
+      const orderId = queryOrderId ?? sessionStorage.getItem('currentOrderId')
+      if (!orderId) {
+        toast.error('Order tidak ditemukan, silakan checkout ulang')
+        router.push('/cart')
+        return
+      }
+
+      const response  = await paymentAPI.create(Number(orderId), 'midtrans')
+      const snapToken = response.snapToken
+
+      if (!snapToken) {
+        toast.error('Gagal mendapatkan token pembayaran')
+        return
+      }
+
+      openSnap(orderId, snapToken)
+
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Gagal memproses pembayaran')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-lg mx-auto px-4 py-10">
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-9 h-9 bg-gray-900 rounded-xl flex items-center justify-center text-white">
-            <Lock size={16} />
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center text-white">
+            <Lock size={18} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Pembayaran</h1>
-            <p className="text-xs text-gray-400">Transaksi dilindungi enkripsi SSL 256-bit</p>
+            <h1 className="text-2xl font-bold text-gray-900">Konfirmasi Pembayaran</h1>
+            <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+              <ShieldCheck size={11} /> Transaksi dilindungi enkripsi SSL 256-bit
+            </p>
           </div>
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center gap-0 mb-6 max-w-sm">
+        <div className="flex items-center mb-8">
           {['Keranjang', 'Checkout', 'Pembayaran'].map((step, i) => (
             <div key={step} className="flex items-center">
               <div className={`flex items-center gap-2 ${i === 2 ? 'text-gray-900' : 'text-gray-400'}`}>
@@ -184,203 +131,111 @@ export default function PaymentPage() {
                 </div>
                 <span className="text-xs font-semibold hidden sm:block">{step}</span>
               </div>
-              {i < 2 && (
-                <div className={`w-8 sm:w-12 h-px mx-1 ${i < 2 ? 'bg-green-500' : 'bg-gray-200'}`} />
-              )}
+              {i < 2 && <div className="w-8 sm:w-12 h-px mx-1 bg-green-500" />}
             </div>
           ))}
         </div>
 
-        {/* Total Card */}
-        <div className="bg-gray-900 text-white rounded-2xl p-5 mb-5">
-          <p className="text-sm text-gray-400 mb-1">Total Pembayaran</p>
-          <p className="text-3xl font-bold">{formatPrice(grandTotal)}</p>
-          <p className="text-xs text-gray-500 mt-1">Termasuk ongkos kirim</p>
-        </div>
-
-        {/* Pilih Metode */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">
-          <h2 className="font-bold text-gray-900 mb-4">Pilih Metode Pembayaran</h2>
-          <div className="space-y-2">
-            {PAYMENT_METHODS.map(({ id, icon: Icon, label, sub }) => (
-              <button
-                key={id}
-                onClick={() => setMethod(id)}
-                className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                  method === id
-                    ? 'border-gray-900 bg-gray-50'
-                    : 'border-gray-100 hover:border-gray-200'
-                }`}
-              >
-                <div className={`p-2.5 rounded-xl flex-shrink-0 ${
-                  method === id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  <Icon size={18} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-900">{label}</p>
-                  <p className="text-xs text-gray-400">{sub}</p>
-                </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                  method === id ? 'border-gray-900 bg-gray-900' : 'border-gray-300'
-                }`}>
-                  {method === id && <div className="w-2 h-2 bg-white rounded-full" />}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Transfer Bank Detail */}
-        {method === 'transfer' && selectedMethod && 'banks' in selectedMethod && (
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-4 space-y-3">
-            <p className="font-bold text-blue-900 text-sm">Rekening Tujuan Transfer</p>
-            {(selectedMethod.banks as { bank: string; no: string; name: string }[]).map((b) => (
-              <div key={b.bank} className="bg-white rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-gray-500">Bank {b.bank}</p>
-                  <p className="text-lg font-bold text-gray-900 font-mono tracking-wide">{b.no}</p>
-                  <p className="text-xs text-gray-400">a.n. {b.name}</p>
-                </div>
-                <button
-                  onClick={() => handleCopy(b.no, b.bank)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800"
-                >
-                  {copied === b.bank
-                    ? <><Check size={13} /> Disalin</>
-                    : <><Copy size={13} /> Salin</>
-                  }
-                </button>
-              </div>
-            ))}
-            <p className="text-xs text-blue-600">
-              Transfer tepat sesuai nominal. Konfirmasi dalam 1x24 jam.
+        {/* Shipping Info */}
+        {checkoutData && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Truck size={15} className="text-gray-500" />
+              <p className="text-sm font-bold text-gray-900">Info Pengiriman</p>
+            </div>
+            <p className="text-sm font-semibold text-gray-800">{checkoutData.form.name}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{checkoutData.form.phone}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {checkoutData.form.address}, {checkoutData.form.city},{' '}
+              {checkoutData.form.province} {checkoutData.form.zip}
             </p>
-          </div>
-        )}
-
-        {/* E-Wallet Detail */}
-        {method === 'ewallet' && selectedMethod && 'wallets' in selectedMethod && (
-          <div className="bg-green-50 border border-green-100 rounded-2xl p-5 mb-4 space-y-3">
-            <p className="font-bold text-green-900 text-sm">Nomor Tujuan E-Wallet</p>
-            {(selectedMethod.wallets as { name: string; no: string }[]).map((w) => (
-              <div key={w.name} className="bg-white rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-gray-500">{w.name}</p>
-                  <p className="text-lg font-bold text-gray-900 font-mono">{w.no}</p>
-                </div>
-                <button
-                  onClick={() => handleCopy(w.no, w.name)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-green-600 hover:text-green-800"
-                >
-                  {copied === w.name
-                    ? <><Check size={13} /> Disalin</>
-                    : <><Copy size={13} /> Salin</>
-                  }
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Kartu Kredit Detail */}
-        {method === 'card' && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">
-            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <CreditCard size={16} /> Detail Kartu
-            </h3>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-600">Nomor Kartu</Label>
-                <Input
-                  placeholder="0000 0000 0000 0000"
-                  value={cardForm.number}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '').slice(0, 16)
-                    setCardForm({ ...cardForm, number: val.replace(/(\d{4})/g, '$1 ').trim() })
-                  }}
-                  className="h-11 rounded-xl border-gray-200 font-mono text-sm"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-600">Nama Pemegang Kartu</Label>
-                <Input
-                  placeholder="Nama sesuai kartu"
-                  value={cardForm.name}
-                  onChange={(e) => setCardForm({ ...cardForm, name: e.target.value.toUpperCase() })}
-                  className="h-11 rounded-xl border-gray-200 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-600">Berlaku s/d</Label>
-                  <Input
-                    placeholder="MM/YY"
-                    value={cardForm.expiry}
-                    onChange={(e) => {
-                      let v = e.target.value.replace(/\D/g, '').slice(0, 4)
-                      if (v.length >= 2) v = v.slice(0, 2) + '/' + v.slice(2)
-                      setCardForm({ ...cardForm, expiry: v })
-                    }}
-                    className="h-11 rounded-xl border-gray-200 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-600">CVV</Label>
-                  <Input
-                    type="password"
-                    placeholder="•••"
-                    maxLength={3}
-                    value={cardForm.cvv}
-                    onChange={(e) => setCardForm({ ...cardForm, cvv: e.target.value.replace(/\D/g, '') })}
-                    className="h-11 rounded-xl border-gray-200 text-sm"
-                  />
-                </div>
-              </div>
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+              <p className="text-xs text-gray-500">Kurir</p>
+              <p className="text-xs font-semibold text-gray-800">
+                {checkoutData.courier.name} · {checkoutData.courier.time}
+              </p>
             </div>
           </div>
         )}
 
-        {/* COD Detail */}
-        {method === 'cod' && (
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-4">
-            <p className="font-bold text-amber-900 text-sm mb-1">Bayar di Tempat (COD)</p>
-            <p className="text-xs text-amber-700 leading-relaxed">
-              Siapkan uang tunai sebesar <strong>{formatPrice(grandTotal)}</strong> saat kurir tiba.
-              Pastikan kamu berada di lokasi pengiriman.
-            </p>
+        {/* Order Items */}
+        {items.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Package size={15} className="text-gray-500" />
+              <p className="text-sm font-bold text-gray-900">Item Pesanan</p>
+            </div>
+            <div className="space-y-3">
+              {items.map((item) => (
+                <div key={item.product.id} className="flex items-center gap-3">
+                  <img
+                    src={item.product.image}
+                    alt={item.product.name}
+                    className="w-12 h-12 rounded-xl object-cover bg-gray-100"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{item.product.name}</p>
+                    {item.size && <p className="text-xs text-gray-400">Size: {item.size}</p>}
+                    <p className="text-xs text-gray-400">x{item.quantity}</p>
+                  </div>
+                  <p className="text-xs font-bold text-gray-900 whitespace-nowrap">
+                    {formatPrice(item.product.price * item.quantity)}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <Separator className="my-5" />
-
-        <div className="flex justify-between items-center mb-5">
-          <p className="text-sm text-gray-600">Total Pembayaran</p>
-          <p className="text-2xl font-bold text-gray-900">{formatPrice(grandTotal)}</p>
+        {/* Ringkasan Biaya */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm mb-6">
+          <p className="text-sm font-bold text-gray-900 mb-3">Ringkasan Biaya</p>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="text-gray-800">{formatPrice(subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Ongkos Kirim</span>
+              <span className="text-gray-800">{formatPrice(shippingCost)}</span>
+            </div>
+            <Separator className="my-2" />
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-gray-900">Total</span>
+              <span className="font-bold text-xl text-gray-900">{formatPrice(grandTotal)}</span>
+            </div>
+          </div>
         </div>
 
+        {/* Tombol Bayar */}
         <Button
           onClick={handlePay}
-          disabled={!method || loading}
+          disabled={loading}
           className="w-full h-14 bg-gray-900 hover:bg-gray-700 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? (
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Memproses Pembayaran...
+              Memproses...
             </div>
           ) : (
             <>
-              <Lock size={18} />
-              {method ? `Bayar ${formatPrice(grandTotal)}` : 'Pilih Metode Pembayaran'}
-              {method && <ChevronRight size={18} />}
+              <Lock size={16} />
+              Bayar Sekarang · {formatPrice(grandTotal)}
+              <ChevronRight size={16} />
             </>
           )}
         </Button>
 
-        <p className="text-xs text-center text-gray-400 mt-3">
-          Dengan melanjutkan, kamu menyetujui Syarat & Ketentuan AUSTIN & CO
-        </p>
+        {/* Powered by Midtrans */}
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <ShieldCheck size={13} className="text-gray-400" />
+          <p className="text-xs text-gray-400">
+            Pembayaran diproses secara aman oleh{' '}
+            <span className="font-semibold text-gray-500">Midtrans</span>
+          </p>
+        </div>
+
       </div>
     </div>
   )

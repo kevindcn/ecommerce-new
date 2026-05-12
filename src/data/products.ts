@@ -11,8 +11,8 @@ export interface Product {
   reviews: number
   stock: number
   description: string
-  features: string[]
-  images: string[]
+  features?: string[]
+  images?: string[]
 }
 
 export const products: Product[] = [

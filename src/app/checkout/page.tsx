@@ -11,6 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { MapPin, User, Package, ArrowRight, ArrowLeft, Check } from 'lucide-react'
+import { orderAPI } from '@/lib/api'
+import { toast } from 'sonner'
+import { useAuth } from '@/context/AuthContext'
 
 const COURIERS = [
   { name: 'JNE Reguler', time: '2-3 hari', price: 25000 },
@@ -21,6 +24,8 @@ const COURIERS = [
 
 export default function CheckoutPage() {
   const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const { isLoggedIn } = useAuth()
   const { items, totalPrice } = useCart()
   const [courier, setCourier] = useState(COURIERS[0])
   const [form, setForm] = useState({
@@ -35,16 +40,40 @@ export default function CheckoutPage() {
     return null
   }
 
- const handleSubmit = (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault()
-  // Simpan semua data yang dibutuhkan untuk buat order
-  sessionStorage.setItem('checkoutData', JSON.stringify({
-    form,
-    courier,
-    grandTotal,
-    // Simpan juga items dari cart untuk dibuat order nanti
-  }))
-  router.push('/payment')
+  setLoading(true)
+
+  try {
+    const orderItems = items.map((item) => ({
+      productId: Number(item.product.id),
+      quantity: item.quantity,
+      size: item.size,
+    }))
+
+    const order = await orderAPI.create({
+      items: orderItems,
+      shippingAddress: form.address,
+      shippingCity: form.city,
+      shippingProvince: form.province,
+      shippingZip: form.zip,
+      phone: form.phone,
+      notes: form.notes,
+      courier: courier.name,
+    })
+
+    // Simpan order id untuk halaman payment
+    sessionStorage.setItem('currentOrderId', String(order.id))
+    sessionStorage.setItem('currentOrderTotal', String(grandTotal))
+
+    toast.success('Pesanan berhasil dibuat!')
+    router.push('/payment')
+
+  } catch (err: unknown) {
+    toast.error(err instanceof Error ? err.message : 'Gagal membuat pesanan')
+  } finally {
+    setLoading(false)
+  }
 }
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -236,12 +265,17 @@ export default function CheckoutPage() {
                   <span className="text-xl font-bold text-gray-900">{formatPrice(grandTotal)}</span>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full h-12 bg-gray-900 hover:bg-gray-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-                >
-                  Lanjut ke Pembayaran <ArrowRight size={16} />
-                </Button>
+               <Button
+                   type="submit"
+                   disabled={loading}
+                   className="w-full h-12 bg-gray-900 hover:bg-gray-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+>
+                  {loading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                         ) : (
+                  <>Lanjut ke Pembayaran <ArrowRight size={16} /></>
+                         )}
+               </Button>
               </div>
             </div>
           </div>

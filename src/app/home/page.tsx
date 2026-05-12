@@ -1,40 +1,47 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { products as fallbackProducts } from '@/data/products'
+import { type Product } from '@/data/products'
 import { productAPI } from '@/lib/api'
 import Navbar from "@/components/navbar";
 import ProductCard from '@/components/ui/productCard';
 import { ArrowRight, Zap, Shield, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { useAuth } from '@/context/AuthContext';
+import LoginModal from '@/components/LoginModal';
+
 
 export default function HomePage() {
   const categories = ["Semua", "Footwear", "Apparel", "Bags", "Accessories"];
   const [activeCategory, setActiveCategory] = useState('Semua')
-  const [allProducts, setAllProducts] = useState(fallbackProducts)
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const { isLoggedIn } = useAuth()
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  
 
   // Fetch dari backend saat tersedia
   useEffect(() => {
-    const loadProducts = async () => {
-      setLoadingProducts(true)
-      try {
-        const data = await productAPI.getAll()
-        if (data && data.length > 0) setAllProducts(data)
-      } catch {
-        // pakai fallback data jika backend belum jalan
-      } finally {
-        setLoadingProducts(false)
-      }
+  const loadProducts = async () => {
+    setLoadingProducts(true)
+    try {
+      const data = await productAPI.getAll()
+      console.log('Produk dari backend:', data) // ← tambah ini
+      if (data && data.length > 0) setAllProducts(data)
+    } catch (err) {
+      console.error('Error fetch produk:', err) // ← tambah ini
+    } finally {
+      setLoadingProducts(false)
     }
-    loadProducts()
-  }, [])
+  }
+  loadProducts()
+}, [])
 
   const filtered =
     activeCategory === 'Semua'
       ? allProducts
-      : allProducts.filter((p) => p.category === activeCategory)
+      : allProducts.filter((p) => p.category === activeCategory) 
 
   return (
     <div className="min-h-screen bg-white">
