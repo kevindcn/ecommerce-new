@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/navbar'
 import { useCart } from '@/context/CartContext'
@@ -30,14 +30,13 @@ interface CheckoutData {
   grandTotal: number
 }
 
-export default function PaymentPage() {
+function PaymentContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const { items, totalPrice, clearCart } = useCart()
   const [loading, setLoading]           = useState(false)
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
 
-  // Bisa dipanggil dari /payment?orderId=X (lanjut bayar dari orders page)
   const queryOrderId = searchParams.get('orderId')
 
   useEffect(() => {
@@ -68,9 +67,7 @@ export default function PaymentPage() {
       onError: (_result: any) => {
         toast.error('Pembayaran gagal, silakan coba lagi')
       },
-      onClose: () => {
-        // Tetap di halaman ini, tidak redirect
-      },
+      onClose: () => {},
     })
   }
 
@@ -227,7 +224,6 @@ export default function PaymentPage() {
           )}
         </Button>
 
-        {/* Powered by Midtrans */}
         <div className="flex items-center justify-center gap-2 mt-4">
           <ShieldCheck size={13} className="text-gray-400" />
           <p className="text-xs text-gray-400">
@@ -238,5 +234,17 @@ export default function PaymentPage() {
 
       </div>
     </div>
+  )
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+      </div>
+    }>
+      <PaymentContent />
+    </Suspense>
   )
 }
