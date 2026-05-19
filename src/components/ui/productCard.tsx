@@ -38,13 +38,10 @@ export default function ProductCard({ product }: { product: Product }) {
 
   const handleAddClick = (e: React.MouseEvent) => {
     e.preventDefault()
-
-    // ✅ Cek login dulu sebelum apapun
     if (!isLoggedIn) {
       setShowLoginModal(true)
       return
     }
-
     if (needsVariant) {
       setShowModal(true)
     } else {
@@ -56,25 +53,21 @@ export default function ProductCard({ product }: { product: Product }) {
   }
 
   const handleConfirmAdd = () => {
-    // ✅ Double-check login (kalau modal variant sudah terbuka tapi session expired)
     if (!isLoggedIn) {
       setShowModal(false)
       setShowLoginModal(true)
       return
     }
-
     if (needsVariant && !selectedSize) {
       toast.error('Pilih ukuran dulu!', {
         description: 'Ukuran wajib dipilih sebelum menambahkan ke keranjang.',
       })
       return
     }
-
     addToCart(product, qty, selectedSize || undefined)
     toast.success('Berhasil ditambahkan!', {
       description: `${product.name}${selectedSize ? ` · ${selectedSize}` : ''}${selectedColor ? ` · ${selectedColor}` : ''} · x${qty}`,
     })
-
     setShowModal(false)
     setSelectedSize('')
     setSelectedColor('')
@@ -83,7 +76,8 @@ export default function ProductCard({ product }: { product: Product }) {
 
   return (
     <>
-      <Link href={`/product/${product.id}`} className="group block">
+      {/* ✅ Link diubah ke /products/[id] agar konsisten dengan halaman detail */}
+      <Link href={`/products/${product.id}`} className="group block">
         <div className="relative overflow-hidden rounded-2xl bg-gray-50 aspect-square mb-3">
           <Image
             src={product.image}
@@ -173,7 +167,7 @@ export default function ProductCard({ product }: { product: Product }) {
             </div>
 
             {/* Size */}
-            {(product.category === 'Apparel' || product.category === 'Footwear') && (
+            {needsVariant && (
               <div className="mb-5">
                 <div className="flex justify-between items-center mb-3">
                   <p className="text-sm font-bold text-gray-900">Ukuran</p>
@@ -267,7 +261,7 @@ export default function ProductCard({ product }: { product: Product }) {
         </div>
       )}
 
-      {/* ✅ Login Modal — muncul saat add to cart tanpa login */}
+      {/* Login Modal */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}

@@ -22,34 +22,44 @@ function LoginContent() {
   const [form, setForm] = useState({ email: '', password: '' })
 
   // Jika sudah login redirect langsung
-  useEffect(() => {
-    if (isLoggedIn) {
-      const redirect = sessionStorage.getItem('redirectAfterLogin')
-      sessionStorage.removeItem('redirectAfterLogin')
-      router.replace(redirect || '/home')
-    }
-  }, [isLoggedIn, router])
+  // useEffect(() => {
+  //   if (isLoggedIn) {
+  //     const redirect = sessionStorage.getItem('redirectAfterLogin')
+  //     sessionStorage.removeItem('redirectAfterLogin')
+  //     router.replace(redirect || '/home')
+  //   }
+  // }, [isLoggedIn, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+  e.preventDefault()
+  setLoading(true)
+  setError('')
 
-    try {
-      const res = await authAPI.login(form.email, form.password)
-      login(res.user, res.token)
-      toast.success(`Selamat datang kembali, ${res.user.name}! 👋`)
+  try {
+    const res = await authAPI.login(form.email, form.password)
+    
+    // ✅ Cek role SEBELUM login() dipanggil
+    const isAdmin = res.user.role === 'ADMIN'
+    
+    login(res.user, res.token)
+    toast.success(`Selamat datang, ${res.user.name}! 👋`)
 
-      const redirect = sessionStorage.getItem('redirectAfterLogin')
-      sessionStorage.removeItem('redirectAfterLogin')
-      router.replace(redirect || '/home')
-
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan')
-    } finally {
-      setLoading(false)
+    // ✅ Redirect berdasarkan role
+    if (isAdmin) {
+      router.replace('/admin')
+      return
     }
+
+    const redirect = sessionStorage.getItem('redirectAfterLogin')
+    sessionStorage.removeItem('redirectAfterLogin')
+    router.replace(redirect || '/home')
+
+  } catch (err: unknown) {
+    setError(err instanceof Error ? err.message : 'Terjadi kesalahan')
+  } finally {
+    setLoading(false)
   }
+}
 
   return (
     <div className="min-h-screen flex">

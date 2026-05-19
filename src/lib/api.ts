@@ -93,3 +93,29 @@ export const paymentAPI = {
       body: JSON.stringify({ orderId, method }),
     }),
 }
+
+// ── ADMIN ──
+export const adminAPI = {
+  getDashboard: () => fetchAPI('/api/admin/dashboard'),
+
+  // Products
+  getProducts: () => fetchAPI('/api/admin/products'),
+  createProduct: (data: object) =>
+    fetchAPI('/api/admin/products', { method: 'POST', body: JSON.stringify(data) }),
+  updateProduct: (id: number, data: object) =>
+    fetchAPI(`/api/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProduct: (id: number) =>
+    fetchAPI(`/api/admin/products/${id}`, { method: 'DELETE' }),
+
+  // Orders
+  getOrders: () => fetchAPI('/api/admin/orders'),
+  updateOrderStatus: (id: number, status: string) =>
+    fetchAPI(`/api/admin/orders/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
+
+  // Users
+  getUsers: () => fetchAPI('/api/admin/users'),
+  updateUserRole: (id: string, role: string) =>
+    fetchAPI(`/api/admin/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+  deleteUser: (id: string) =>
+    fetchAPI(`/api/admin/users/${id}`, { method: 'DELETE' }),
+}
