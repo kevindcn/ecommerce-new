@@ -1,185 +1,243 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { type Product } from '@/data/products'
 import { productAPI } from '@/lib/api'
-import Navbar from "@/components/navbar";
-import ProductCard from '@/components/ui/productCard';
-import { ArrowRight, Zap, Shield, RefreshCw } from "lucide-react";
-import Link from "next/link";
-import Image from "next/image";
-import { useAuth } from '@/context/AuthContext';
-import LoginModal from '@/components/LoginModal';
+import Navbar from '@/components/navbar'
+import ProductCard from '@/components/ui/productCard'
+import { ArrowRight, Zap, Shield, RefreshCw, Search, X } from 'lucide-react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { useAuth } from '@/context/AuthContext'
+import LoginModal from '@/components/LoginModal'
 
+const categories = ['Semua', 'Footwear', 'Apparel', 'Bags', 'Accessories']
 
 export default function HomePage() {
-  const categories = ["Semua", "Footwear", "Apparel", "Bags", "Accessories"];
-  const [activeCategory, setActiveCategory] = useState('Semua')
-  const [allProducts, setAllProducts] = useState<Product[]>([])
-  const [loadingProducts, setLoadingProducts] = useState(false)
+  const searchParams  = useSearchParams()
+  const router        = useRouter()
   const { isLoggedIn } = useAuth()
+
+  const [activeCategory, setActiveCategory] = useState('Semua')
+  const [allProducts, setAllProducts]       = useState<Product[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  
 
-  // Fetch dari backend saat tersedia
+  // Query dari URL (?search=...)
+  const urlSearch = searchParams.get('search') || ''
+  const [searchInput, setSearchInput] = useState(urlSearch)
+
+  // Sync search input saat URL berubah (misal dari navbar)
   useEffect(() => {
-  const loadProducts = async () => {
-    setLoadingProducts(true)
-    try {
-      const data = await productAPI.getAll()
-      console.log('Produk dari backend:', data) // ← tambah ini
-      if (data && data.length > 0) setAllProducts(data)
-    } catch (err) {
-      console.error('Error fetch produk:', err) // ← tambah ini
-    } finally {
-      setLoadingProducts(false)
-    }
-  }
-  loadProducts()
-}, [])
+    setSearchInput(urlSearch)
+  }, [urlSearch])
 
-  const filtered =
-    activeCategory === 'Semua'
-      ? allProducts
-      : allProducts.filter((p) => p.category === activeCategory) 
+  // Fetch semua produk dari backend
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoadingProducts(true)
+      try {
+        const data = await productAPI.getAll()
+        setAllProducts(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Gagal memuat produk:', err)
+        setAllProducts([])
+      } finally {
+        setLoadingProducts(false)
+      }
+    }
+    loadProducts()
+  }, [])
+
+  // Filter produk berdasarkan kategori + search
+  const filteredProducts = useMemo(() => {
+    let result = allProducts
+
+    // Filter kategori
+    if (activeCategory !== 'Semua') {
+      result = result.filter(p => p.category === activeCategory)
+    }
+
+    // Filter search
+    const q = (urlSearch || searchInput).trim().toLowerCase()
+    if (q) {
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q)
+      )
+    }
+
+    return result
+  }, [allProducts, activeCategory, urlSearch, searchInput])
+
+  const handleClearSearch = () => {
+    setSearchInput('')
+    router.push('/home')
+  }
+
+  const handleCategoryChange = (cat: string) => {
+    setActiveCategory(cat)
+    // Reset search saat ganti kategori
+    if (urlSearch) router.push('/home')
+  }
+
+  const activeQuery = urlSearch || searchInput
 
   return (
-    <div className="min-h-screen bg-white">
+    <>
       <Navbar />
+      <main className="min-h-screen bg-white">
 
-      {/* Hero Banner */}
-      <section className="relative h-[70vh] min-h-[500px] bg-gray-900 overflow-hidden">
-        <Image
-          src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1600&h=900&fit=crop"
-          alt="Hero banner"
-          fill
-          className="object-cover opacity-50"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-transparent" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
-          <div className="max-w-lg">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-              <Zap size={12} className="text-yellow-400" />
-              New Collection 2025
-            </div>
-            <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight leading-none mb-4">
-              Style Your
-              <br />
-              <span className="italic font-normal">Urban Life</span>
-            </h1>
-            <p className="text-gray-300 text-lg mb-8 leading-relaxed">
-              Koleksi eksklusif untuk kamu yang punya selera tinggi di kehidupan urban sehari-hari.
-            </p>
-            <div className="flex gap-3">
-              <button className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm">
-                Shop Now <ArrowRight size={16} />
-              </button>
-              <button className="border border-white/30 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10 transition-colors text-sm">
-                Lihat Koleksi
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Bar */}
-      <section className="bg-gray-50 border-y border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-3 divide-x divide-gray-200">
-            {[
-              { icon: RefreshCw, title: "Free Returns", sub: "30 hari pengembalian gratis" },
-              { icon: Shield, title: "100% Original", sub: "Produk original bergaransi" },
-              { icon: Zap, title: "Fast Delivery", sub: "Pengiriman 1-3 hari kerja" },
-            ].map(({ icon: Icon, title, sub }) => (
-              <div key={title} className="flex items-center gap-3 px-6 py-5">
-                <div className="p-2 bg-gray-900 rounded-lg text-white flex-shrink-0">
-                  <Icon size={16} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{title}</p>
-                  <p className="text-xs text-gray-500 hidden sm:block">{sub}</p>
+        {/* ── HERO ── */}
+        {!activeQuery && (
+          <section className="relative bg-gray-950 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 flex flex-col md:flex-row items-center gap-10">
+              <div className="flex-1 z-10">
+                <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-4">New Collection 2025</p>
+                <h1 className="text-4xl md:text-6xl font-black text-white leading-tight mb-5">
+                  Tampil <span className="text-blue-500">Beda</span>,<br />Tampil Percaya Diri
+                </h1>
+                <p className="text-gray-400 text-base mb-8 max-w-md leading-relaxed">
+                  Koleksi pakaian dan aksesori premium untuk gaya hidup modern kamu.
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-2xl flex items-center gap-2 transition-colors"
+                  >
+                    Belanja Sekarang <ArrowRight size={16} />
+                  </button>
+                  {!isLoggedIn && (
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      className="border-2 border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white font-bold px-6 py-3 rounded-2xl transition-all"
+                    >
+                      Daftar Gratis
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Product Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="flex items-end justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Produk Terbaru</h2>
-            <p className="text-gray-500 mt-1 text-sm">Temukan pilihan terbaik kami</p>
-          </div>
-          <Link href="/home" className="text-sm font-semibold text-gray-900 hover:underline flex items-center gap-1">
-            Lihat Semua <ArrowRight size={14} />
-          </Link>
-        </div>
-
-        {/* Category Filter */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`flex-shrink-0 px-5 py-2 rounded-full text-sm font-semibold transition-all ${
-                activeCategory === cat
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Product Grid */}
-  {loadingProducts ? (
-      <div className="flex justify-center items-center py-20">
-        <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-      </div>
-    ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6">
-          {filtered.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-    )}
-      </section>
-
-      {/* Promo Banner */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-        <div className="relative bg-gray-900 rounded-3xl overflow-hidden h-48">
-          <Image
-            src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200&h=400&fit=crop"
-            alt="Promo"
-            fill
-            className="object-cover opacity-30"
-          />
-          <div className="relative h-full flex items-center justify-between px-10">
-            <div>
-              <p className="text-yellow-400 text-sm font-bold uppercase tracking-widest mb-2">Special Offer</p>
-              <h3 className="text-white text-3xl font-bold">Diskon Hingga 40%</h3>
-              <p className="text-gray-300 text-sm mt-1">Hanya untuk produk pilihan. Terbatas!</p>
+              {/* Trust badges */}
+              <div className="flex md:flex-col gap-3 z-10">
+                {[
+                  { icon: Zap, label: 'Pengiriman Cepat', sub: '1–3 hari kerja' },
+                  { icon: Shield, label: 'Produk Asli', sub: 'Garansi resmi' },
+                  { icon: RefreshCw, label: 'Retur Mudah', sub: '30 hari gratis' },
+                ].map(({ icon: Icon, label, sub }) => (
+                  <div key={label} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                    <Icon size={18} className="text-blue-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-white">{label}</p>
+                      <p className="text-xs text-gray-500">{sub}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <button className="bg-white text-gray-900 font-bold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors text-sm flex-shrink-0">
-              Klaim Sekarang
-            </button>
-          </div>
-        </div>
-      </section>
+          </section>
+        )}
 
-      {/* Footer */}
-      <footer className="bg-gray-50 border-t border-gray-100 py-10">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-2xl font-bold tracking-tighter text-gray-900 mb-2">AUSTIN & CO</p>
-          <p className="text-sm text-gray-400">© 2025 AUSTIN & CO Fashion Store. All rights reserved.</p>
-        </div>
-      </footer>
-    </div>
-  );
+        {/* ── PRODUCTS SECTION ── */}
+        <section id="products" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+
+          {/* Search result header */}
+          {activeQuery ? (
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-2">
+                <Search size={20} className="text-gray-400" />
+                <h2 className="text-xl font-bold text-gray-900">
+                  Hasil untuk &quot;<span className="text-blue-600">{activeQuery}</span>&quot;
+                </h2>
+                <button
+                  onClick={handleClearSearch}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-full transition-colors ml-auto"
+                >
+                  <X size={12} /> Hapus pencarian
+                </button>
+              </div>
+              <p className="text-sm text-gray-400 ml-8">
+                {loadingProducts ? 'Memuat...' : `${filteredProducts.length} produk ditemukan`}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900">Produk Pilihan</h2>
+                <p className="text-sm text-gray-400 mt-0.5">Temukan koleksi terbaik kami</p>
+              </div>
+
+              {/* Category filter */}
+              <div className="flex gap-2 flex-wrap">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => handleCategoryChange(cat)}
+                    className={`text-xs font-bold px-4 py-2 rounded-xl border-2 transition-all ${
+                      activeCategory === cat
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Loading skeleton */}
+          {loadingProducts && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-gray-100 rounded-2xl aspect-square mb-3" />
+                  <div className="h-3 bg-gray-100 rounded w-1/3 mb-2" />
+                  <div className="h-4 bg-gray-100 rounded w-2/3 mb-2" />
+                  <div className="h-4 bg-gray-100 rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Product grid */}
+          {!loadingProducts && filteredProducts.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {filteredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          )}
+
+          {/* Tidak ditemukan */}
+          {!loadingProducts && filteredProducts.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Search size={24} className="text-gray-300" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                {activeQuery ? `Tidak ada produk untuk "${activeQuery}"` : 'Belum ada produk'}
+              </h3>
+              <p className="text-sm text-gray-400 mb-6 max-w-sm">
+                {activeQuery
+                  ? 'Coba kata kunci lain atau lihat semua produk kami.'
+                  : 'Produk akan segera hadir. Pantau terus!'}
+              </p>
+              {activeQuery && (
+                <button
+                  onClick={handleClearSearch}
+                  className="bg-gray-900 hover:bg-gray-700 text-white text-sm font-bold px-6 py-3 rounded-2xl transition-colors"
+                >
+                  Lihat Semua Produk
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      </main>
+
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+    </>
+  )
 }
-
-
